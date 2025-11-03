@@ -1,0 +1,6 @@
+[
+  {
+    "action": "clone",
+    "src": "QuantumFusion-network/react-vite-template"
+  }
+]
