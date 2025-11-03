@@ -46,7 +46,7 @@
   pnpm install
 
   # 3. Generate features with Claude Code
-  claude-code .
+  claude .
   # Type: /setup
 
   Branch lifecycle
