@@ -1,261 +1,315 @@
 ---
 name: asset-management
-description: Implements complete asset management feature for Polkadot dApps (create, mint, transfer, destroy tokens). Use when user needs token/asset management functionality or mentions creating custom tokens, minting, transfers, or portfolio views.
+description: Complete asset management feature for Polkadot dApps using the Assets pallet. Use when user needs fungible token/asset functionality including creating custom tokens, minting tokens to accounts, transferring tokens between accounts, destroying tokens, viewing portfolios, or managing token metadata. Generates production-ready code (~2,200 lines across 15 files) with full lifecycle support (create→mint→transfer→destroy), real-time fee estimation, transaction tracking, and user-friendly error messages. Works with template infrastructure (WalletContext, ConnectionContext, TransactionContext, balance utilities, shared components). Load when user mentions assets, tokens, fungible tokens, token creation, minting, portfolio, or asset pallet.
 ---
 
-# Asset Management Feature Implementation
+# Asset Management Feature
 
-Implements the asset management feature for a Polkadot dApp using polkadot-api.
+Implement complete asset management functionality for Polkadot dApps.
 
-## Overview
+## Implementation Overview
 
-This skill generates ~2,200 lines of production-ready code across 21 files:
-- 19 new files (lib, hooks, components)
-- 2 modified files (component exports, routing)
-- Complete asset lifecycle: create → mint → transfer → destroy
-- Real-time fee estimation, transaction tracking, error handling
+Generate asset management in this order:
 
-## Template Infrastructure (Already Available)
+1. **Pure functions** (lib/) - Asset operations, toast configs, error messages
+2. **Custom hooks** - Mutation management, fee estimation, asset ID queries
+3. **Components** - Forms for create/mint/transfer/destroy, asset lists, portfolio
+4. **Integration** - Exports and routing
 
-Your template provides:
-- ✅ WalletContext - Wallet connection and account selection
-- ✅ ConnectionContext - polkadot-api client and connection management
-- ✅ TransactionContext - Transaction lifecycle tracking
-- ✅ TanStack Query - Server state management (30s stale, 5min GC)
-- ✅ Error handling - Type-safe error parsing
-- ✅ Sonner toasts - Transaction notifications
-- ✅ shadcn/ui components - Button, Card, Input, Label, Badge, etc.
+**Output:** 14 new files, 4 modified files, ~2,100 lines
 
-## Critical Conventions (from CLAUDE.md)
+**Template provides:** `useFee` hook and `FeeDisplay` component (used by all features)
 
-**State Management:**
-- NEVER use `useReducer` - use `useState` or context
-- Component state with `useState`, shared state via Context
-- Server state via TanStack Query only
+## Critical Conventions
 
-**TypeScript:**
-- NEVER use `any` - use `unknown` and narrow types
-- NEVER use type assertions (`as`) - let types prove correctness
-- Prefer narrow types (literals, discriminated unions)
+Follow template's CLAUDE.md strictly:
 
-**Architecture:**
-- Components are presentational - minimal logic
-- Business logic in `lib/` folder and custom hooks
-- Pure functions, immutability, early returns
+**State:** NEVER `useReducer` - use `useState` or context only
+**TypeScript:** NEVER `any` or `as` - use `unknown` and narrow types
+**Architecture:** Components presentational, logic in `lib/` and hooks
+**Exports:** ALL exports through barrel files (`index.ts`)
+**Balance:** ALWAYS use template's `toPlanck`/`fromPlanck` - NEVER create custom
+**Components:** ALWAYS use template shared components - NEVER recreate
+**Navigation:** Add links to EXISTING SIDEBAR in App.tsx - NEVER create separate tab navigation
 
-**polkadot-api ONLY (NEVER @polkadot/api):**
-- Use `MultiAddress.Id(address)` for addresses
-- Use `Binary.fromText(string)` for strings
-- Use `Utility.batch_all({ calls })` for batches
-- Pallet names are capitalized: `Assets`, `Utility`
-- Parameters are objects with named properties
+## Common Mistakes
 
-## Implementation Order (5-Layer Dependency Tree)
+❌ **Creating tab navigation in page content** - Navigation belongs in App.tsx sidebar
+❌ **Custom balance utilities** - Use template's `toPlanck`/`fromPlanck`
+❌ **Recreating FeeDisplay or TransactionFormFooter** - Use template components
+❌ **Using `@polkadot/api`** - Only use `polkadot-api`
+❌ **Type assertions (`as`)** - Let types prove correctness
 
-Generate files in this exact order to respect dependencies:
+## Layer 1: Pure Functions
 
-### Layer 1: Pure Functions (No dependencies)
+### 1. lib/assetOperations.ts
 
-**1. lib/assetOperations.ts**
-- Load reference: `reference/asset-operations.md` for patterns
-- Exports: `createAssetBatch`, `mintTokens`, `transferTokens`, `destroyAssetBatch`
-- Interfaces: `CreateAssetParams`, `MintParams`, `TransferParams`, `DestroyAssetParams`
-- Key pattern: Build calls array, return `Utility.batch_all({ calls })`
+See `references/asset-operations.md` for complete patterns.
 
-**2. lib/assetToasts.ts** (new file)
-- Toast configurations for all asset operations
-- Use `ToastConfig<T>` interface from template
-- **Important:** T is the params type (CreateAssetParams, MintParams, etc.)
-- Exports: `createAssetToasts`, `mintTokensToasts`, `transferTokensToasts`, `destroyAssetToasts`
+Exports:
+- `createAssetBatch(api, params, signerAddress)` - Create + metadata + optional mint
+- `mintTokens(api, params)` - Mint tokens to recipient
+- `transferTokens(api, params)` - Transfer tokens
+- `destroyAssetBatch(api, params)` - 5-step destruction
 
-**3. lib/assetErrorMessages.ts**
-- Load reference: `reference/error-messages.md` for 23 user-friendly error messages
-- Exports: `ASSET_ERROR_MESSAGES` object, `getAssetErrorMessage` function
-- Maps pallet error names to friendly messages with remediation steps
+Key: Use `toPlanck` from template, `MultiAddress.Id()`, `Binary.fromText()`, `.decodedCall`, `Utility.batch_all()`
 
-### Layer 2: Custom Hooks (Template dependencies only)
+### 2. lib/assetToasts.ts
 
-**4. hooks/useAssetMutation.ts**
-- Load reference: `reference/mutation-hook.md` for pattern
-- Generic hook for asset mutations with transaction tracking
-- Uses: `useTransaction`, `useWalletContext`, `useConnectionContext` from template
-- Returns: `{ execute, isLoading, error, reset }`
+Toast configurations for all operations:
 
-**5. hooks/useFee.ts**
-- Real-time fee estimation with `useDeferredValue` (500ms debounce)
-- Calls `transaction.getPaymentInfo(address, { at: 'best' })`
-- Returns: `{ fee, isCalculating, error }`
+```typescript
+import type { ToastConfig } from './toastConfigs'
 
-**6. hooks/useNextAssetId.ts**
-- TanStack Query hook for `api.query.Assets.Asset.getEntries()`
-- Finds next available asset ID
-- Returns: `{ nextAssetId, isLoading, error }`
-
-### Layer 3: Query Helpers
-
-**7. lib/queryHelpers.ts** (ADD to existing file if exists, or create new)
-- Add: `invalidateAssetQueries`, `invalidateBalanceQueries`
-- Helpers for cache invalidation after mutations
-
-### Layer 4: Shared UI Components
-
-**8. components/shared/FeeDisplay.tsx**
-- Displays fee state (loading/error/amount)
-- Uses `Badge` component from shadcn/ui
-- Props: `{ fee, isCalculating, error }`
-
-**9. components/shared/TransactionReview.tsx**
-- JSON preview with `Collapsible` component
-- Displays transaction details before submission
-- Props: `{ params, title }`
-
-**10. components/shared/TransactionFormFooter.tsx**
-- Shared form footer with FeeDisplay + action Button
-- Props: `{ fee, isCalculating, feeError, onSubmit, submitLabel, disabled }`
-
-**11. components/shared/AccountDashboard.tsx**
-- Account balance display + faucet link
-- Uses `useWalletContext`, queries native balance
-- Shows connected account info
-
-### Layer 5: Feature Components
-
-**12. components/features/CreateAsset.tsx**
-- Load reference: `reference/form-component.md` for form pattern
-- Full form with `useAssetMutation` + `useFee` + `useNextAssetId`
-- Form fields: name, symbol, decimals, minBalance, initialSupply (optional)
-- Uses `createAssetBatch` operation
-
-**13. components/features/MintTokens.tsx**
-- Form with `useAssetMutation` + `useFee`
-- Form fields: assetId, recipient, amount
-- Uses `mintTokens` operation
-
-**14. components/features/TransferTokens.tsx**
-- Form with `useAssetMutation` + `useFee`
-- Form fields: assetId, recipient, amount
-- Uses `transferTokens` operation
-
-**15. components/features/DestroyAsset.tsx**
-- Form with confirmation step + `useAssetMutation` + `useFee`
-- Requires typing asset ID to confirm destruction
-- Uses `destroyAssetBatch` operation (5-step process)
-
-**16. components/features/AssetList.tsx**
-- Query all assets with TanStack Query
-- Filter and search functionality
-- Maps to `AssetCard` components
-
-**17. components/features/AssetCard.tsx**
-- Display asset info (name, symbol, supply, accounts)
-- Action menu: mint, transfer, destroy
-- Uses `Card` from shadch/ui
-
-**18. components/features/AssetDashboard.tsx**
-- Main dashboard combining AssetList + AccountDashboard
-- Tab navigation between create/mint/transfer/destroy
-- Portfolio view
-
-### Layer 6: Integration
-
-**19. components/index.ts** (MODIFY existing file)
-- Add exports for all new shared UI components
-- Maintain existing exports
-
-**20. App.tsx** (MODIFY existing file)
-- Add routes/navigation for asset management pages
-- Keep existing structure intact
-
-## Reference Documents (Load On-Demand)
-
-**When implementing lib/assetOperations.ts:**
-```bash
-cat reference/asset-operations.md
+export const createAssetToasts: ToastConfig<CreateAssetParams> = {
+  signing: (params) => ({ description: `Creating ${params.symbol}...` }),
+  broadcasted: (params) => ({ description: `${params.symbol} sent to network` }),
+  inBlock: (params) => ({ description: `${params.symbol} in block` }),
+  finalized: (params) => ({ title: 'Asset Created! 🎉', description: `${params.name} ready` }),
+  error: (params, error) => ({ title: 'Creation Failed', description: parseError(error) }),
+}
 ```
-Shows polkadot-api patterns for create/mint/transfer/destroy operations.
 
-**When implementing hooks/useAssetMutation.ts:**
-```bash
-cat reference/mutation-hook.md
+Create similar configs for mint, transfer, destroy.
+
+### 3. lib/assetErrorMessages.ts
+
+See `references/error-messages.md` for complete list.
+
+Exports `ASSET_ERROR_MESSAGES` object and `getAssetErrorMessage(errorType)` function.
+
+### 4. lib/assetQueryHelpers.ts (NEW file)
+
+Asset-specific query invalidation helpers:
+
+```typescript
+import type { QueryClient } from '@tanstack/react-query'
+
+export const invalidateAssetQueries = async (queryClient: QueryClient) => {
+  await queryClient.invalidateQueries({ queryKey: ['assets'] })
+  await queryClient.invalidateQueries({ queryKey: ['assetMetadata'] })
+}
+
+export const invalidateBalanceQueries = (
+  queryClient: QueryClient,
+  assetId: number,
+  addresses: (string | undefined)[]
+) => {
+  addresses.forEach((address) => {
+    if (address) {
+      queryClient.invalidateQueries({ queryKey: ['assetBalance', assetId, address] })
+    }
+  })
+}
 ```
-Shows generic mutation hook pattern with transaction tracking.
 
-**When implementing feature components:**
-```bash
-cat reference/form-component.md
+**Note:** Template has base `queryHelpers.ts` - this adds asset-specific helpers.
+
+## Layer 2: Custom Hooks
+
+### 5. hooks/useAssetMutation.ts
+
+Generic mutation hook:
+
+```typescript
+export const useAssetMutation = <TParams>({
+  params,
+  operationFn,
+  toastConfig,
+  onSuccess,
+  transactionKey,
+  isValid,
+}: AssetMutationConfig<TParams>) => {
+  const { selectedAccount } = useWalletContext()
+  const { executeTransaction } = useTransaction<TParams>(toastConfig)
+
+  const transaction = selectedAccount && (!isValid || isValid(params))
+    ? operationFn(params)
+    : null
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAccount || !transaction) throw new Error('No account or transaction')
+      const observable = transaction.signSubmitAndWatch(selectedAccount.polkadotSigner)
+      await executeTransaction(transactionKey, observable, params)
+    },
+    onSuccess,
+  })
+
+  return { mutation, transaction }
+}
 ```
-Shows form component pattern with validation and fee estimation.
 
-**When implementing lib/assetErrorMessages.ts:**
-```bash
-cat reference/error-messages.md
+### 6. hooks/useNextAssetId.ts
+
+Query next available asset ID:
+
+```typescript
+export function useNextAssetId() {
+  const { api } = useConnectionContext()
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['nextAssetId'],
+    queryFn: async () => {
+      const result = await api.query.Assets.NextAssetId.getValue()
+      if (result === undefined) throw new Error('NextAssetId undefined')
+      return result
+    },
+    staleTime: 0,
+    gcTime: 0,
+  })
+
+  return { nextAssetId: data?.toString() ?? '', isLoading }
+}
 ```
-Shows 23 user-friendly error messages for Assets pallet errors.
 
-## Validation Steps
+## Layer 3: Components
 
-After generating all files:
+See `references/form-patterns.md` and `references/template-integration.md` for complete patterns.
 
-**1. TypeScript Validation (REQUIRED):**
+### 8-11. Form Components
+
+Create these forms using standard layout from `references/form-patterns.md`:
+
+- **CreateAsset.tsx** - Create with `useNextAssetId()`, fields: name, symbol, decimals, minBalance, initialSupply
+- **MintTokens.tsx** - Mint, fields: assetId, recipient, amount
+- **TransferTokens.tsx** - Transfer, fields: assetId, recipient, amount
+- **DestroyAsset.tsx** - Destroy with confirmation, field: assetId (type to confirm)
+
+All forms use:
+- `AccountDashboard` at top
+- `TransactionReview` in right column
+- `TransactionFormFooter` at bottom
+- `FeatureErrorBoundary` wrapper
+
+### 12-14. Display Components
+
+**AssetList.tsx** - Query and display all assets:
+
+```typescript
+const { data: assets } = useQuery({
+  queryKey: ['assets'],
+  queryFn: async () => await api.query.Assets.Asset.getEntries(),
+})
+```
+
+**AssetCard.tsx** - Individual asset display with action menu
+
+**AssetBalance.tsx** - Display asset balance for account using `formatBalance` from template
+
+### 15. AssetDashboard.tsx
+
+Portfolio view combining `AccountDashboard` + `AssetList`.
+
+**NO tab navigation in this component** - navigation is in App.tsx sidebar (see Layer 4).
+
+## Layer 4: Integration
+
+### 16-18. Exports
+
+**components/index.ts** - Add:
+```typescript
+export { CreateAsset } from './CreateAsset'
+export { MintTokens } from './MintTokens'
+export { TransferTokens } from './TransferTokens'
+export { DestroyAsset } from './DestroyAsset'
+export { AssetList } from './AssetList'
+export { AssetCard } from './AssetCard'
+export { AssetBalance } from './AssetBalance'
+export { AssetDashboard } from './AssetDashboard'
+```
+
+**hooks/index.ts** - Add:
+```typescript
+export { useAssetMutation } from './useAssetMutation'
+export { useNextAssetId } from './useNextAssetId'
+// Note: useFee is in template, not generated here
+```
+
+**lib/index.ts** - Add:
+```typescript
+export * from './assetOperations'
+export { invalidateAssetQueries, invalidateBalanceQueries } from './assetQueryHelpers'
+export { getAssetErrorMessage } from './assetErrorMessages'
+```
+
+### 19. App.tsx
+
+**CRITICAL: Add navigation links to EXISTING SIDEBAR, not as separate tabs.**
+
+Common mistake: Creating tab navigation in the main content area. Instead:
+
+```typescript
+// In App.tsx sidebar navigation
+<nav className="sidebar">
+  {/* Existing links */}
+  <Link to="/dashboard">Dashboard</Link>
+  
+  {/* ADD asset management links HERE in sidebar */}
+  <Link to="/assets/create">Create Asset</Link>
+  <Link to="/assets/mint">Mint Tokens</Link>
+  <Link to="/assets/transfer">Transfer Tokens</Link>
+  <Link to="/assets/destroy">Destroy Asset</Link>
+  <Link to="/assets/portfolio">Portfolio</Link>
+</nav>
+
+// In routes
+<Routes>
+  {/* Existing routes */}
+  <Route path="/" element={<Dashboard />} />
+  
+  {/* ADD asset management routes */}
+  <Route path="/assets/create" element={<CreateAsset />} />
+  <Route path="/assets/mint" element={<MintTokens />} />
+  <Route path="/assets/transfer" element={<TransferTokens />} />
+  <Route path="/assets/destroy" element={<DestroyAsset />} />
+  <Route path="/assets/portfolio" element={<AssetDashboard />} />
+</Routes>
+```
+
+**DO NOT create separate tab navigation in the page content - use the existing sidebar.**
+
+## Validation
+
+After generation:
+
 ```bash
+# REQUIRED
 bash .claude/scripts/validate-typescript.sh
-```
-Must pass without errors.
 
-**2. Import Verification:**
-- ✅ ALL imports from `polkadot-api` and `@polkadot-api/descriptors`
-- ❌ ZERO imports from `@polkadot/api` (this is critical!)
-
-**3. Convention Adherence:**
-- No `useReducer` usage
-- No `any` types
-- No type assertions (`as`)
-- Components are presentational
-- Business logic in lib/ and hooks/
-
-**4. Optional Quality Checks:**
-```bash
-bash .claude/scripts/validate-lint.sh
-bash .claude/scripts/validate-build.sh
+# Verify imports
+grep -r "@polkadot/api" src/  # Should be ZERO
+grep -r "parseUnits\|formatUnits" src/  # Should be ZERO (use template utilities)
 ```
 
-## Expected Output
+## Expected Capabilities
 
-**Files Generated:** 19 new files
-- 5 lib modules (operations, toasts, errors, query helpers, formatters)
-- 3 hooks (mutation, fee, nextAssetId)
-- 4 shared components (FeeDisplay, TransactionReview, FormFooter, AccountDashboard)
-- 7 feature components (Create, Mint, Transfer, Destroy, List, Card, Dashboard)
-
-**Files Modified:** 2 files
-- components/index.ts (add exports)
-- App.tsx (add routing)
-
-**Total Lines:** ~2,200 lines of production-ready code
-
-**Capabilities Added:**
+After implementation:
 - ✅ Create custom tokens with metadata
 - ✅ Mint tokens to recipients
 - ✅ Transfer tokens between accounts
-- ✅ Destroy tokens safely (5-step process)
-- ✅ View all tokens and balances
-- ✅ Real-time fee estimation
-- ✅ Transaction notifications with status tracking
-- ✅ User-friendly error messages with remediation steps
+- ✅ Destroy tokens (5-step process)
+- ✅ View portfolio and balances
+- ✅ Real-time fee estimation (via template's `useFee`)
+- ✅ Transaction notifications (via template's TransactionContext)
+- ✅ User-friendly error messages
 
-## Completion Report
+## References
 
-After successful generation, report:
-1. ✅ Files generated (19) and modified (2)
-2. ✅ Validation results (TypeScript compilation status)
-3. ✅ Import verification (zero @polkadot/api imports)
-4. ✅ Any warnings or recommendations
-5. ✅ Next steps: `pnpm dev` to start dev server
+Load these as needed during implementation:
 
-## Notes
+- **Asset operations:** `references/asset-operations.md`
+- **Form patterns:** `references/form-patterns.md`
+- **Error messages:** `references/error-messages.md`
+- **Template integration:** `references/template-integration.md`
 
-- Follow CLAUDE.md conventions strictly
-- Load references only when needed (progressive loading)
-- Validate thoroughly before reporting completion
-- All operations use `Utility.batch_all` for atomicity
-- Asset destruction is a 5-step process (freeze → start → approvals → accounts → finish)
+## Completion Checklist
+
+- [ ] 14 new files generated (useFee is in template, not generated)
+- [ ] 4 files modified (3 index.ts + App.tsx)
+- [ ] **Navigation added to EXISTING SIDEBAR (not as separate tabs)**
+- [ ] TypeScript validation passes
+- [ ] Zero @polkadot/api imports
+- [ ] Template utilities used: `toPlanck`, `fromPlanck`, `formatBalance`, `useFee`, `FeeDisplay`
+- [ ] Shared components used: `TransactionFormFooter`, `TransactionReview`, `AccountDashboard`
+- [ ] All exports through barrel files

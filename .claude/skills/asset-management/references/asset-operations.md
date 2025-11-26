@@ -1,21 +1,21 @@
-# Asset Operations Reference
+# Asset Operations Patterns
 
-Core patterns for implementing asset pallet operations with polkadot-api.
+polkadot-api patterns for asset pallet operations.
 
 ## Key Patterns
 
-**Use these wrappers:**
 - `MultiAddress.Id(address)` for all addresses
 - `Binary.fromText(string)` for all strings/metadata
-- `.decodedCall` property for batch operations
-- `Utility.batch_all({ calls })` for all-or-nothing batches
+- `.decodedCall` for batch operations
+- `Utility.batch_all({ calls })` for atomicity
+- `toPlanck(value, decimals)` from template for conversions
 
-## createAssetBatch Pattern
+## createAssetBatch
 
 ```typescript
 import { Binary, type TxCallData, type TypedApi } from 'polkadot-api'
 import { MultiAddress, type qfn } from '@polkadot-api/descriptors'
-import { parseUnits } from './utils'
+import { toPlanck } from '@/lib'
 
 type QfnApi = TypedApi<typeof qfn>
 
@@ -35,7 +35,7 @@ export const createAssetBatch = (
   signerAddress: string
 ) => {
   const assetId = parseInt(params.assetId)
-  const minBalance = BigInt(params.minBalance) * 10n ** BigInt(params.decimals)
+  const minBalance = toPlanck(params.minBalance, parseInt(params.decimals))
 
   const createCall = api.tx.Assets.create({
     id: assetId,
@@ -53,7 +53,7 @@ export const createAssetBatch = (
   const calls: TxCallData[] = [createCall, metadataCall]
 
   if (params.initialMintAmount && parseFloat(params.initialMintAmount) > 0) {
-    const mintAmount = parseUnits(params.initialMintAmount, parseInt(params.decimals))
+    const mintAmount = toPlanck(params.initialMintAmount, parseInt(params.decimals))
     const mintCall = api.tx.Assets.mint({
       id: assetId,
       beneficiary: MultiAddress.Id(params.initialMintBeneficiary),
@@ -66,9 +66,8 @@ export const createAssetBatch = (
 }
 ```
 
-## Other Operations
+## mintTokens
 
-**mintTokens:**
 ```typescript
 export interface MintParams {
   assetId: string
@@ -81,12 +80,13 @@ export const mintTokens = (api: QfnApi, params: MintParams) => {
   return api.tx.Assets.mint({
     id: parseInt(params.assetId),
     beneficiary: MultiAddress.Id(params.recipient),
-    amount: parseUnits(params.amount, params.decimals),
+    amount: toPlanck(params.amount, params.decimals),
   })
 }
 ```
 
-**transferTokens:**
+## transferTokens
+
 ```typescript
 export interface TransferParams {
   assetId: string
@@ -99,12 +99,13 @@ export const transferTokens = (api: QfnApi, params: TransferParams) => {
   return api.tx.Assets.transfer({
     id: parseInt(params.assetId),
     target: MultiAddress.Id(params.recipient),
-    amount: parseUnits(params.amount, params.decimals),
+    amount: toPlanck(params.amount, params.decimals),
   })
 }
 ```
 
-**destroyAssetBatch** (5-step process):
+## destroyAssetBatch (5-step)
+
 ```typescript
 export interface DestroyAssetParams {
   assetId: string
@@ -124,3 +125,4 @@ export const destroyAssetBatch = (api: QfnApi, params: DestroyAssetParams) => {
   return api.tx.Utility.batch_all({ calls })
 }
 ```
+
